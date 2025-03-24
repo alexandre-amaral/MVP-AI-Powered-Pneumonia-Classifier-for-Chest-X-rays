@@ -41,12 +41,14 @@ translations = {
         'result_header': 'Analysis Result',
         'result_normal': 'NORMAL',
         'result_pneumonia': 'PNEUMONIA DETECTED',
+        'result_not_xray': 'NOT A CHEST X-RAY',
         'confidence_prefix': 'Confidence',
         'normal': 'Normal',
         'pneumonia': 'Pneumonia',
         'threshold_message': 'Classification threshold',
         'additional_info_normal': 'The analysis did not identify characteristic patterns of pneumonia in this image. This result is based solely on the AI algorithm and does not replace clinical evaluation. Additional information such as patient history, symptoms, and complementary exams are essential for correct diagnosis.',
         'additional_info_pneumonia': 'The analysis detected patterns that may indicate pneumonia in this image. This result is based solely on the AI algorithm and serves as an aid to medical interpretation. A complete clinical evaluation is necessary, considering symptoms, patient history, and complementary exams for diagnostic confirmation.',
+        'additional_info_not_xray': 'The uploaded image does not appear to be a chest X-ray. Please upload a valid chest X-ray image for analysis.',
         'error_processing': 'Error processing image',
         'no_image_title': 'Sample Result Preview',
         'no_image_description': 'Upload a chest X-ray image to get an analysis',
@@ -74,12 +76,14 @@ translations = {
         'result_header': 'Resultado da Análise',
         'result_normal': 'NORMAL',
         'result_pneumonia': 'PNEUMONIA DETECTADA',
+        'result_not_xray': 'NÃO É UM RAIO-X DE TÓRAX',
         'confidence_prefix': 'Confiança',
         'normal': 'Normal',
         'pneumonia': 'Pneumonia',
         'threshold_message': 'Limiar de classificação',
         'additional_info_normal': 'A análise não identificou padrões característicos de pneumonia nesta imagem. Este resultado baseia-se apenas no algoritmo de IA e não substitui a avaliação clínica. Informações adicionais como histórico do paciente, sintomas e exames complementares são essenciais para o diagnóstico correto.',
         'additional_info_pneumonia': 'A análise detectou padrões que podem indicar pneumonia nesta imagem. Este resultado é baseado apenas no algoritmo de IA e serve como auxílio à interpretação médica. Uma avaliação clínica completa é necessária, considerando sintomas, histórico do paciente e exames complementares para confirmação diagnóstica.',
+        'additional_info_not_xray': 'A imagem enviada não parece ser um raio-X de tórax. Por favor, envie uma imagem válida de raio-X de tórax para análise.',
         'error_processing': 'Erro ao processar imagem',
         'no_image_title': 'Exemplo de Visualização de Resultado',
         'no_image_description': 'Carregue uma imagem de raio-X do tórax para obter uma análise',
@@ -550,6 +554,68 @@ def preprocess_image(_image):
     
     return transform(_image).unsqueeze(0)
 
+def is_chest_xray(image):
+    """
+    Check if the uploaded image is likely to be a chest X-ray.
+    
+    Args:
+        image: PIL Image object
+    
+    Returns:
+        Boolean indicating if the image is likely a chest X-ray
+    """
+    try:
+        # Convert image to grayscale for easier processing
+        gray_image = image.convert('L')
+        
+        # Get image size and aspect ratio
+        width, height = gray_image.size
+        aspect_ratio = width / height
+        
+        # Get image histogram
+        histogram = gray_image.histogram()
+        
+        # Calculate standard deviation of pixel values
+        pixels = list(gray_image.getdata())
+        std_dev = np.std(pixels)
+        
+        # Calculate mean brightness
+        mean_brightness = np.mean(pixels)
+        
+        # Most chest X-rays have:
+        # 1. Aspect ratio close to 1:1
+        # 2. High contrast (high standard deviation)
+        # 3. Relatively dark overall (not too bright)
+        # 4. A bimodal histogram distribution
+        
+        # Check aspect ratio (typical chest X-rays are roughly square or slightly wider)
+        aspect_ratio_ok = 0.7 <= aspect_ratio <= 1.5
+        
+        # Check contrast (X-rays typically have high contrast)
+        contrast_ok = std_dev > 40
+        
+        # Check brightness (X-rays are typically not too bright)
+        brightness_ok = 30 <= mean_brightness <= 200
+        
+        # Check if image has significant bright and dark regions
+        has_dark = any(histogram[0:50])
+        has_bright = any(histogram[150:256])
+        has_bimodal_dist = has_dark and has_bright
+        
+        # Combined check
+        is_xray = aspect_ratio_ok and contrast_ok and brightness_ok and has_bimodal_dist
+        
+        print(f"X-ray detection: aspect_ratio={aspect_ratio:.2f}, std_dev={std_dev:.2f}, brightness={mean_brightness:.2f}")
+        print(f"Checks: aspect={aspect_ratio_ok}, contrast={contrast_ok}, brightness={brightness_ok}, bimodal={has_bimodal_dist}")
+        print(f"Is likely an X-ray: {is_xray}")
+        
+        return is_xray
+    
+    except Exception as e:
+        print(f"Error in X-ray validation: {str(e)}")
+        # If there's an error, we'll assume it might be an X-ray to avoid false rejections
+        return True
+
 def predict_image(image, threshold=0.5):
     """
     Process and predict an image using the loaded model
@@ -559,11 +625,15 @@ def predict_image(image, threshold=0.5):
         threshold: Classification threshold (float between 0 and 1)
         
     Returns:
-        prediction_class: String "NORMAL" or "PNEUMONIA"
+        prediction_class: String "NORMAL", "PNEUMONIA" or "NOT_XRAY"
         confidence: Percentage confidence in the prediction
         pneumonia_probability: Raw probability of pneumonia
     """
     try:
+        # First, check if the image is a chest X-ray
+        if not is_chest_xray(image):
+            return "NOT_XRAY", 0.0, 0.0
+        
         # Load model
         model = load_model()
         
@@ -840,9 +910,12 @@ def main():
                     if prediction == "NORMAL":
                         icon = ""
                         color_class = "result-normal"
-                    else:
+                    elif prediction == "PNEUMONIA":
                         icon = ""
                         color_class = "result-pneumonia"
+                    else:  # NOT_XRAY
+                        icon = ""
+                        color_class = "result-not-xray"
                     
                     # Display results using native Streamlit components where possible
                     
@@ -851,29 +924,37 @@ def main():
                     
                     # Result header and prediction
                     st.markdown(f'<div class="result-header">{t["result_header"]}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="result-value {color_class}">{t[f"result_{prediction.lower()}"]}</div>', unsafe_allow_html=True)
-                    st.markdown(f'{t["confidence_prefix"]}: <strong>{confidence:.2f}%</strong>', unsafe_allow_html=True)
                     
-                    # Start confidence meter
-                    st.markdown('<div class="confidence-meter">', unsafe_allow_html=True)
-                    
-                    # Normal probability
-                    normal_prob = 1.0 - pneumonia_prob
-                    st.markdown(f'<div class="label-normal">{t["normal"]}: {normal_prob*100:.2f}%</div>', unsafe_allow_html=True)
-                    st.progress(normal_prob)
-                    
-                    # Pneumonia probability
-                    st.markdown(f'<div class="label-pneumonia" style="margin-top: 10px">{t["pneumonia"]}: {pneumonia_prob*100:.2f}%</div>', unsafe_allow_html=True)
-                    st.progress(pneumonia_prob)
-                    
-                    # End confidence meter
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    # Threshold information
-                    st.markdown(f'{t["threshold_message"]}: <strong>{threshold:.2f}</strong>', unsafe_allow_html=True)
-                    
-                    # Additional information based on prediction
-                    st.markdown(f'<div style="margin-top: 15px">{t[f"additional_info_{prediction.lower()}"]}</div>', unsafe_allow_html=True)
+                    # Show appropriate result based on the prediction
+                    if prediction == "NOT_XRAY":
+                        st.markdown(f'<div class="result-value {color_class}">{t["result_not_xray"]}</div>', unsafe_allow_html=True)
+                        
+                        # Information for not an X-ray
+                        st.markdown(f'<div style="margin-top: 15px">{t["additional_info_not_xray"]}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="result-value {color_class}">{t[f"result_{prediction.lower()}"]}</div>', unsafe_allow_html=True)
+                        st.markdown(f'{t["confidence_prefix"]}: <strong>{confidence:.2f}%</strong>', unsafe_allow_html=True)
+                        
+                        # Start confidence meter (only if it's a valid X-ray)
+                        st.markdown('<div class="confidence-meter">', unsafe_allow_html=True)
+                        
+                        # Normal probability
+                        normal_prob = 1.0 - pneumonia_prob
+                        st.markdown(f'<div class="label-normal">{t["normal"]}: {normal_prob*100:.2f}%</div>', unsafe_allow_html=True)
+                        st.progress(normal_prob)
+                        
+                        # Pneumonia probability
+                        st.markdown(f'<div class="label-pneumonia" style="margin-top: 10px">{t["pneumonia"]}: {pneumonia_prob*100:.2f}%</div>', unsafe_allow_html=True)
+                        st.progress(pneumonia_prob)
+                        
+                        # End confidence meter
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        # Threshold information
+                        st.markdown(f'{t["threshold_message"]}: <strong>{threshold:.2f}</strong>', unsafe_allow_html=True)
+                        
+                        # Additional information based on prediction
+                        st.markdown(f'<div style="margin-top: 15px">{t[f"additional_info_{prediction.lower()}"]}</div>', unsafe_allow_html=True)
                     
                     # End container
                     st.markdown('</div>', unsafe_allow_html=True)
