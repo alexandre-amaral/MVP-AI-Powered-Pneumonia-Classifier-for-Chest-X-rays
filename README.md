@@ -103,22 +103,6 @@ jupyter notebook pneumonia_analysis.ipynb
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/yourusername/MVP-AI-Powered-Pneumonia-Classifier-for-Chest-X-rays/blob/main/pneumonia_analysis.ipynb)
 
-## Project Structure
-
-```
-.
-├── app.py                      
-├── documentation.md            
-├── mobilenet_confusion_matrix.png
-├── mobilenet_model.pth         
-├── mobilenet_training_history.png
-├── pneumonia_analysis.ipynb    
-├── prepare_data.py             
-├── requirements.txt            
-├── train/                      
-├── train_mobilenet.py          
-└── val/                        
-```
 
 ## Troubleshooting
 
