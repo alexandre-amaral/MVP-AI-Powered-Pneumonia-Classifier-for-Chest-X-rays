@@ -1,138 +1,80 @@
-# AI-Powered Pneumonia Classifier for Chest X-rays
+# Pneumonia Classification from Chest X-rays Using MobileNetV3
 
-<div align="center">
-  <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python 3.8+">
-  <img src="https://img.shields.io/badge/PyTorch-1.9+-orange.svg" alt="PyTorch 1.9+">
-  <img src="https://img.shields.io/badge/Streamlit-1.10+-green.svg" alt="Streamlit 1.10+">
-  <br>
-  <img src="mobilenet_confusion_matrix.png" alt="Confusion Matrix" width="450px">
-</div>
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![PyTorch](https://img.shields.io/badge/PyTorch-1.9+-orange.svg)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.10+-green.svg)
 
 ## Overview
 
-This project implements a deep learning model to classify chest X-ray images into Normal and Pneumonia categories. Early detection of pneumonia through X-ray analysis can save lives, especially in regions with limited access to radiologists. Our system achieves ~93% accuracy on the validation set while maintaining fast inference times suitable for deployment in resource-constrained environments.
+This project implements a binary classification model using deep learning to distinguish between Normal and Pneumonia chest X-ray images. The classifier, based on MobileNetV3 Small architecture, achieves approximately 93% accuracy with efficient inference suitable for deployment in resource-constrained environments.
 
-## Technical Details
+This is an initial MVP using MobileNetV3 Small, selected for its computational efficiency and fast training capabilities, facilitating rapid development with limited local resources. Future improvements are expected to increase accuracy by utilizing more robust architectures and larger datasets.
 
-### Model Architecture
+**Live demo available here:** [AI-Powered Pneumonia Classifier](https://ai-powered-pneumonia-classifier-for-chest-x-rays.streamlit.app/)
 
-We employ MobileNetV3 Small as our backbone architecture due to its excellent balance of accuracy and computational efficiency:
+## Model Architecture
 
-- **Base Model**: MobileNetV3 Small (pretrained on ImageNet)
-- **Feature Extractor Output**: 576-dimensional embeddings
-- **Classification Head**:
-  - Linear(576 → 256) with Hardswish activation
-  - Dropout(0.2) for regularization
-  - Linear(256 → 2) for binary classification
-- **Parameters**: ~2.5M parameters (most frozen during training)
+- **Backbone**: MobileNetV3 Small (pretrained on ImageNet)
+- **Feature Output**: 576-dimensional embedding
+- **Classification Layers**:
+  - Linear (576 → 256), activation: Hardswish
+  - Dropout (0.2)
+  - Linear (256 → 2)
+- **Model Parameters**: ~2.5M (mostly frozen during training)
 - **Model Size**: ~4.4MB
 
-<div align="center">
-  <img src="mobilenet_training_history.png" alt="Training History" width="650px">
-  <p><i>Training metrics showing accuracy and loss progression across epochs</i></p>
-</div>
+![Training Metrics](mobilenet_training_history.png)
 
-### Dataset & Preprocessing
+## Dataset & Preprocessing
 
-The dataset consists of grayscale chest X-ray images organized in a hierarchical folder structure:
-
+Dataset structure:
 ```
 train/
-├── NORMAL/         # 1341 normal chest X-ray images
-└── PNEUMONIA/      # 3875 pneumonia chest X-ray images
+├── NORMAL/         # 1341 images
+└── PNEUMONIA/      # 3875 images
 
 val/
-├── NORMAL/         # 234 normal chest X-ray images
-└── PNEUMONIA/      # 390 pneumonia chest X-ray images
+├── NORMAL/         # 234 images
+└── PNEUMONIA/      # 390 images
 ```
 
-Each image undergoes the following preprocessing steps:
+Preprocessing steps:
+- Resize images to 224×224
+- Convert grayscale to RGB
+- Data augmentation (random flip, rotation ±10°, brightness/contrast ±10%)
+- Normalize using ImageNet mean/std
 
-1. Resizing to 224×224 pixels
-2. Conversion to RGB format (3 identical channels from grayscale)
-3. Data augmentation:
-   - Random horizontal flips (p=0.5)
-   - Random rotation (±10°)
-   - Random brightness/contrast variation (±10%)
-4. Normalization using ImageNet statistics:
-   - Mean: [0.485, 0.456, 0.406]
-   - Std: [0.229, 0.224, 0.225]
+## Training Procedure
 
-### Training Methodology
+- **Transfer Learning** with MobileNetV3 (ImageNet pretrained)
+- **Training phases**:
+  - Initial: Classification head training (10 epochs, LR=5e-4)
+  - Fine-tuning: Whole model training (15 epochs, LR=1e-5)
+- **Optimizer**: Adam
+- **Loss**: Cross-Entropy with class weights (PNEUMONIA: 0.35, NORMAL: 0.65)
+- **Batch Size**: 64
+- **Early Stopping**: Patience of 5 epochs (validation loss)
 
-We employed transfer learning with the following protocol:
+## Results
 
-1. **Base Model**: Pretrained MobileNetV3 Small on ImageNet
-2. **Freezing Strategy**: Initially froze all feature extraction layers
-3. **Training Phases**:
-   - Phase 1: Trained only the classification head (10 epochs)
-   - Phase 2: Fine-tuned the entire model with a reduced learning rate (15 epochs)
-4. **Optimization**:
-   - Optimizer: Adam
-   - Learning Rate: 5e-4 (Phase 1), 1e-5 (Phase 2)
-   - Loss Function: Cross-Entropy Loss with class weighting (PNEUMONIA: 0.35, NORMAL: 0.65)
-   - Batch Size: 64
-   - Early Stopping: Patience of 5 epochs based on validation loss
-5. **Evaluation Metrics**:
-   - Accuracy
-   - F1-Score
-   - Precision & Recall
-   - ROC AUC
+| Metric        | Value           |
+|---------------|-----------------|
+| Accuracy      | 93.2%           |
+| F1-Score      | 0.94            |
+| Precision     | 0.91            |
+| Recall        | 0.96            |
+| ROC AUC       | 0.95            |
+| Inference Time| ~45ms/image (CPU)|
 
-### Performance Analysis
-
-<div align="center">
-  <table>
-    <tr>
-      <th>Metric</th>
-      <th>Value</th>
-    </tr>
-    <tr>
-      <td>Accuracy</td>
-      <td>93.2%</td>
-    </tr>
-    <tr>
-      <td>F1-Score</td>
-      <td>0.94</td>
-    </tr>
-    <tr>
-      <td>Precision</td>
-      <td>0.91</td>
-    </tr>
-    <tr>
-      <td>Recall</td>
-      <td>0.96</td>
-    </tr>
-    <tr>
-      <td>ROC AUC</td>
-      <td>0.95</td>
-    </tr>
-    <tr>
-      <td>Inference Time</td>
-      <td>~45ms per image (CPU)</td>
-    </tr>
-  </table>
-</div>
-
-The confusion matrix shows that our model performs well at identifying both classes, with slightly higher recall for pneumonia cases, which is clinically preferable to missing pneumonia cases:
-
-<div align="center">
-  <img src="mobilenet_confusion_matrix.png" alt="Confusion Matrix" width="450px">
-  <p><i>Confusion matrix showing model performance on validation data</i></p>
-</div>
+![Confusion Matrix](mobilenet_confusion_matrix.png)
 
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/your-username/MVP-AI-Powered-Pneumonia-Classifier-for-Chest-X-rays.git
 cd MVP-AI-Powered-Pneumonia-Classifier-for-Chest-X-rays
-
-# Create and activate a virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -144,62 +86,57 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-The web interface provides:
-1. Upload functionality for chest X-ray images
-2. Adjustable confidence threshold
-3. Bilingual support (English/Portuguese)
-4. Visualization of classification probabilities
-5. Explanations of results
+Features:
+- Image upload
+- Adjustable confidence threshold
+- Bilingual support (English/Portuguese)
+- Classification results visualization
 
 ### Jupyter Notebook
 
-For a detailed exploration of the model training and evaluation process, see our Jupyter notebook:
+Detailed analysis is provided in:
 
 ```bash
 pip install jupyter
 jupyter notebook pneumonia_analysis.ipynb
 ```
 
-You can also view an interactive version of the notebook online:
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/yourusername/MVP-AI-Powered-Pneumonia-Classifier-for-Chest-X-rays/blob/main/pneumonia_analysis.ipynb)
 
 ## Project Structure
 
 ```
 .
-├── app.py                     # Streamlit web application
-├── documentation.md           # Comprehensive documentation
-├── mobilenet_confusion_matrix.png  # Model evaluation visualization
-├── mobilenet_model.pth        # Trained model weights
-├── mobilenet_training_history.png  # Training metrics visualization
-├── pneumonia_analysis.ipynb   # Jupyter notebook with detailed analysis
-├── prepare_data.py            # Dataset preparation utilities
-├── requirements.txt           # Project dependencies
-├── train/                     # Training dataset directory
-├── train_mobilenet.py         # Model training script
-└── val/                       # Validation dataset directory
+├── app.py                      
+├── documentation.md            
+├── mobilenet_confusion_matrix.png
+├── mobilenet_model.pth         
+├── mobilenet_training_history.png
+├── pneumonia_analysis.ipynb    
+├── prepare_data.py             
+├── requirements.txt            
+├── train/                      
+├── train_mobilenet.py          
+└── val/                        
 ```
 
 ## Troubleshooting
 
-If the application experiences loading issues:
-
-1. **Browser Refresh**: Clear the browser cache and reload the page
-2. **Image Format**: Ensure X-ray images are in JPG or PNG format
-3. **Resource Availability**: Check system memory (recommended: 4GB+ free RAM)
-4. **Application Restart**: Restart the Streamlit server
-5. **Dependencies**: Verify PyTorch and Streamlit installations
+- Verify image formats (JPG/PNG)
+- Ensure adequate RAM (minimum 4GB recommended)
+- Restart Streamlit application if necessary
 
 ## Disclaimer
 
-**Important**: This tool is for educational and research purposes only. It should not be used for medical diagnosis or clinical decision-making. The results do not replace evaluation by qualified healthcare professionals. Always consult a physician for proper diagnosis and treatment.
+This project is intended for educational and research purposes only and is not suitable for clinical diagnosis or decision-making. Always consult healthcare professionals for medical advice.
 
 ## Contributors
 
-- Alexandre Amaral - Lead Developer
+- Alexandre Amaral
 
 ## References
 
 1. Wang X, Peng Y, Lu L, Lu Z, Bagheri M, Summers RM. ChestX-ray8: Hospital-scale Chest X-ray Database and Benchmarks on Weakly-Supervised Classification and Localization of Common Thorax Diseases. IEEE CVPR 2017.
 2. Howard, A., Sandler, M., Chu, G., Chen, L.-C., Chen, B., Tan, M., Wang, W., Zhu, Y., Pang, R., Vasudevan, V., Le, Q.V., Adam, H. Searching for MobileNetV3. ICCV 2019.
 3. Rajpurkar P, Irvin J, Zhu K, et al. CheXNet: Radiologist-Level Pneumonia Detection on Chest X-Rays with Deep Learning. 2017.
+
