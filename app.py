@@ -557,6 +557,7 @@ def preprocess_image(_image):
 def is_chest_xray(image):
     """
     Check if the uploaded image is likely to be a chest X-ray.
+    Using PIL-only methods to ensure compatibility with deployment environments.
     
     Args:
         image: PIL Image object
@@ -576,7 +577,7 @@ def is_chest_xray(image):
         histogram = gray_image.histogram()
         
         # Calculate standard deviation of pixel values
-        pixels = list(gray_image.getdata())
+        pixels = np.array(gray_image)
         std_dev = np.std(pixels)
         
         # Calculate mean brightness
@@ -598,16 +599,26 @@ def is_chest_xray(image):
         brightness_ok = 30 <= mean_brightness <= 200
         
         # Check if image has significant bright and dark regions
-        has_dark = any(histogram[0:50])
-        has_bright = any(histogram[150:256])
-        has_bimodal_dist = has_dark and has_bright
+        hist_array = np.array(histogram)
+        dark_pixels = np.sum(hist_array[0:50])
+        light_pixels = np.sum(hist_array[200:256])
+        total_pixels = width * height
         
-        # Combined check
-        is_xray = aspect_ratio_ok and contrast_ok and brightness_ok and has_bimodal_dist
+        dark_proportion = dark_pixels / total_pixels
+        light_proportion = light_pixels / total_pixels
+        
+        has_dark = dark_proportion > 0.15
+        has_light = light_proportion > 0.15
+        has_bimodal_dist = has_dark and has_light
+        
+        # Combined check - at least 3 of 4 criteria should be met
+        checks = [aspect_ratio_ok, contrast_ok, brightness_ok, has_bimodal_dist]
+        is_xray = sum(checks) >= 3
         
         print(f"X-ray detection: aspect_ratio={aspect_ratio:.2f}, std_dev={std_dev:.2f}, brightness={mean_brightness:.2f}")
+        print(f"Dark proportion: {dark_proportion:.2f}, Light proportion: {light_proportion:.2f}")
         print(f"Checks: aspect={aspect_ratio_ok}, contrast={contrast_ok}, brightness={brightness_ok}, bimodal={has_bimodal_dist}")
-        print(f"Is likely an X-ray: {is_xray}")
+        print(f"Is likely an X-ray: {is_xray} ({sum(checks)}/4 criteria met)")
         
         return is_xray
     
